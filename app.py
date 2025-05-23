@@ -19,7 +19,7 @@ if submit:
     csv_filename = f"{topic.replace(' ', '_')}_training_data.csv"
 
     # Gemini client init
-    client = genai.Client(api_key="AIzaSyDchUVEvIC5QQT8KWbA6CFjBAmbrbUcvqg")
+    client = genai.Client(api_key="xxxxxxxxx")
     model_id = "gemini-2.0-flash"
 
     # Google Search Tool
