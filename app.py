@@ -2,6 +2,7 @@ import time
 import requests
 import json
 import csv
+import io
 from bs4 import BeautifulSoup
 import streamlit as st
 from google import genai
@@ -15,9 +16,6 @@ topic = st.text_input("Enter topic of interest:", "agenthacks")
 submit = st.button("Start Scraping and Generate Data")
 
 if submit:
-    merged_filename = f"{topic.replace(' ', '_')}_merged_data.txt"
-    csv_filename = f"{topic.replace(' ', '_')}_training_data.csv"
-
     # Gemini client init
     client = genai.Client(api_key="AIzaSyDchUVEvIC5QQT8KWbA6CFjBAmbrbUcvqg")
     model_id = "gemini-2.0-flash"
@@ -77,10 +75,7 @@ if submit:
 
     with st.spinner("🌐 Scraping URLs and merging content..."):
         merged_text = scrape_and_merge(url_list)
-
-    with open(merged_filename, "w", encoding="utf-8") as f:
-        f.write(merged_text)
-    st.success(f"✅ Merged content saved to: {merged_filename}")
+    st.success(f"✅ Merged content ready in memory.")
 
     # Text chunking function
     def chunk_text(text, max_chars=3000):
@@ -112,9 +107,7 @@ Each example should be a JSON object with two keys: "input" and "output".
 ⚠️ Return ONLY a valid JSON array. No extra text or explanation.
 
 Raw scraped text:
-\"\"\"
-{chunk_text}
-\"\"\"
+\"\"\"{chunk_text}\"\"\"
 """
 
     def convert_raw_to_json(client, model_id, raw_text):
@@ -135,9 +128,7 @@ Raw scraped text:
                     all_json.extend(json_data)
                 except json.JSONDecodeError as e:
                     st.warning(f"⚠️ JSON decode error on chunk {i+1}: {e}")
-                    with open(f"debug_chunk_{i+1}.txt", "w", encoding="utf-8") as debug_file:
-                        debug_file.write(raw_output)
-                    st.warning(f"🛠 Raw output saved to: debug_chunk_{i+1}.txt")
+                    st.code(cleaned_data[:1000], language='json')
         return all_json
 
     st.info("🚀 Generating training data with Gemini...")
@@ -155,32 +146,28 @@ Raw scraped text:
             st.markdown(f"**Output:** {example.get('output', '')}")
             st.markdown("---")
 
-        # Save CSV
-        with open(csv_filename, "w", newline='', encoding="utf-8") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(["input", "output"])
-            for entry in training_data:
-                input_text = entry.get("input", "").replace('\n', ' ').strip()
-                output_text = entry.get("output", "").replace('\n', ' ').strip()
-                writer.writerow([input_text, output_text])
-        st.success(f"📦 Training data saved to: {csv_filename}")
+        # Convert to CSV (in-memory)
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["input", "output"])
+        for entry in training_data:
+            input_text = entry.get("input", "").replace('\n', ' ').strip()
+            output_text = entry.get("output", "").replace('\n', ' ').strip()
+            writer.writerow([input_text, output_text])
+        csv_data = csv_buffer.getvalue()
+        st.success("📦 Training data is ready in memory.")
 
-        # Download buttons for files
-        with open(merged_filename, "r", encoding="utf-8") as f:
-            merged_data = f.read()
-        with open(csv_filename, "r", encoding="utf-8") as f:
-            csv_data = f.read()
-
+        # Download buttons
         st.download_button(
             label="📥 Download Merged Text Data",
-            data=merged_data,
-            file_name=merged_filename,
+            data=merged_text,
+            file_name=f"{topic.replace(' ', '_')}_merged_data.txt",
             mime="text/plain"
         )
 
         st.download_button(
             label="📥 Download Training Data CSV",
             data=csv_data,
-            file_name=csv_filename,
+            file_name=f"{topic.replace(' ', '_')}_training_data.csv",
             mime="text/csv"
         )
