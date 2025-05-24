@@ -8,10 +8,10 @@ from google import genai
 from google.genai import types
 
 # Streamlit UI
-st.title("🔎 Training Data Collector")
+st.title("🔎 Gemini-based Training Data Collector")
 
 # User input
-topic = st.text_input("Enter topic or information you want make dataset", "langchain")
+topic = st.text_input("Enter topic of interest:", "agenthacks")
 submit = st.button("Start Scraping and Generate Data")
 
 if submit:
@@ -26,19 +26,19 @@ if submit:
     google_search_tool = types.Tool(google_search=types.GoogleSearch())
 
     prompt = f"""
-I want to collect data for training a language model about the topic: "{topic}".
+    I want to collect data for training a language model about the topic: "{topic}".
 
-Return ONLY high-quality, direct links that are suitable for scraping. 
-Each link should:
-- Be directly accessible (no redirects or shortened URLs).
-- Contain rich technical data: documentation, code, or detailed tutorials.
-- Be scrape-friendly (avoid heavily JavaScript-based or anti-scraping protected sites).
+    Return ONLY high-quality, direct links that are suitable for scraping. 
+    Each link should:
+    - Be directly accessible (no redirects or shortened URLs).
+    - Contain rich technical data: documentation, code, or detailed tutorials.
+    - Be scrape-friendly (avoid heavily JavaScript-based or anti-scraping protected sites).
 
-IMPORTANT:
-- Do NOT include any descriptions, titles, or explanations.
-- Output should ONLY be clean, full URLs.
-- Each URL should be on a separate line.
-- Return exactly 3 links.
+    ⚠️ IMPORTANT:
+    - Do NOT include any descriptions, titles, or explanations.
+    - Output should ONLY be clean, full URLs.
+    - Each URL should be on a separate line.
+    - Return exactly 3 links.
     """
 
     # Call Gemini to get links
@@ -55,8 +55,9 @@ IMPORTANT:
         pure_links = "".join(part.text for part in response.candidates[0].content.parts)
         url_list = [url.strip() for url in pure_links.strip().splitlines() if url.strip()]
 
-    st.subheader("exacting the links from based on your intrest:")
-
+    st.subheader("🔗 Scraping-Ready Links:")
+    for link in url_list:
+        st.write(link)
 
     # Scraping function
     def scrape_and_merge(urls):
@@ -71,12 +72,15 @@ IMPORTANT:
                 cleaned_text = "\n".join([line.strip() for line in text.splitlines() if line.strip()])
                 merged_content += f"\n--- Content from: {url} ---\n{cleaned_text}\n"
             except Exception as e:
-                st.info("trying other links")
+                st.warning(f"⚠️ Failed to scrape {url}: {e}")
         return merged_content.strip()
 
     with st.spinner("🌐 Scraping URLs and merging content..."):
         merged_text = scrape_and_merge(url_list)
-    st.success("✅ Extraction done from the links")
+
+    with open(merged_filename, "w", encoding="utf-8") as f:
+        f.write(merged_text)
+    st.success(f"✅ Merged content saved to: {merged_filename}")
 
     # Text chunking function
     def chunk_text(text, max_chars=3000):
@@ -142,7 +146,14 @@ Raw scraped text:
     if not training_data:
         st.warning("⚠️ No training data generated.")
     else:
-        st.success(f"✅Generation complete!")
+        st.success(f"✅ Total training examples generated: {len(training_data)}")
+
+        # Show preview (first 3 examples)
+        st.subheader("📋 Sample Training Data (first 3 examples):")
+        for example in training_data[:3]:
+            st.markdown(f"**Input:** {example.get('input', '')}")
+            st.markdown(f"**Output:** {example.get('output', '')}")
+            st.markdown("---")
 
         # Save CSV
         with open(csv_filename, "w", newline='', encoding="utf-8") as csvfile:
@@ -152,7 +163,7 @@ Raw scraped text:
                 input_text = entry.get("input", "").replace('\n', ' ').strip()
                 output_text = entry.get("output", "").replace('\n', ' ').strip()
                 writer.writerow([input_text, output_text])
-        st.success(f"📦 Training data saved")
+        st.success(f"📦 Training data saved to: {csv_filename}")
 
         # Download buttons for files
         with open(merged_filename, "r", encoding="utf-8") as f:
@@ -161,9 +172,15 @@ Raw scraped text:
             csv_data = f.read()
 
         st.download_button(
+            label="📥 Download Merged Text Data",
+            data=merged_data,
+            file_name=merged_filename,
+            mime="text/plain"
+        )
+
+        st.download_button(
             label="📥 Download Training Data CSV",
             data=csv_data,
             file_name=csv_filename,
             mime="text/csv"
         )
-
